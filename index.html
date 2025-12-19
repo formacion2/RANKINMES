@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CONTROL TOWER V56 | Smart Filters</title>
+    
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* --- ESTÉTICA PURPLE TECH (V55) --- */
+        :root {
+            --bg-body: #f4f6f8;
+            --tech-dark: #1e1b4b;
+            --purple-glow: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+            --blue-glow: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            --shadow-glow: 0 4px 15px rgba(124, 58, 237, 0.35);
+            --border-color: #e0e7ff;
+            
+            /* Colores Métricas */
+            --col-gestion: #64748b;
+            --col-pdp: #3b82f6;
+            --col-money: #10b981;
+            --col-risk: #ef4444;
+        }
+
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background-color: var(--bg-body);
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 25px 25px;
+            color: #334155;
+            margin: 0; padding: 0;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* --- LOGIN --- */
+        #loginScreen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(244, 246, 248, 0.95);
+            backdrop-filter: blur(5px);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 9999;
+        }
+        .login-panel {
+            background: white; padding: 40px; width: 320px;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center; border: 1px solid var(--border-color);
+        }
+        .login-input {
+            width: 100%; padding: 12px; margin-bottom: 15px;
+            background: #f8fafc; border: 1px solid #cbd5e1;
+            font-family: 'Rajdhani'; font-size: 16px; font-weight: 600; text-align: center;
+            border-radius: 6px; outline: none;
+        }
+        .login-btn {
+            width: 100%; padding: 12px;
+            background: var(--purple-glow); color: white;
+            font-weight: 700; font-size: 16px; letter-spacing: 1px;
+            border: none; border-radius: 6px; cursor: pointer;
+            box-shadow: var(--shadow-glow);
+        }
+
+        /* --- HEADER --- */
+        .header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 30px; background: white; border-bottom: 1px solid var(--border-color);
+        }
+        .logo-text { font-weight: 800; font-size: 24px; color: var(--tech-dark); letter-spacing: 1px; }
+        .logo-text span { color: #7c3aed; }
+
+        .top-controls { display: flex; gap: 15px; align-items: center; }
+        .control-pod {
+            background: #f1f5f9; padding: 5px 15px; border-radius: 6px;
+            display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 14px;
+        }
+        
+        input[type="date"] {
+            border: none; background: transparent;
+            font-family: 'Rajdhani'; font-weight: 700; font-size: 16px;
+            color: var(--tech-dark); cursor: pointer; outline: none;
+        }
+
+        .upload-btn {
+            background: var(--tech-dark); color: white; border: none; padding: 6px 12px;
+            font-weight: 700; border-radius: 4px; cursor: pointer;
+            display: flex; align-items: center; gap: 5px;
+        }
+
+        /* --- TABS --- */
+        .tabs { display: flex; justify-content: center; gap: 5px; padding-top: 10px; background: white; border-bottom: 1px solid var(--border-color); }
+        .tab-btn {
+            background: transparent; border: none; padding: 10px 25px;
+            font-family: 'Rajdhani'; font-size: 16px; font-weight: 700; color: #64748b;
+            cursor: pointer; border-bottom: 3px solid transparent;
+        }
+        .tab-btn.active { color: #7c3aed; border-bottom-color: #7c3aed; }
+
+        /* --- FILTROS --- */
+        .filter-section {
+            background: white; padding: 10px 30px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex; gap: 15px; align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+        }
+        .hud-select {
+            background: #f8fafc; border: 1px solid #cbd5e1; padding: 6px 10px;
+            font-family: 'Rajdhani'; font-weight: 600; color: var(--tech-dark);
+            border-radius: 4px; outline: none; min-width: 150px;
+        }
+
+        /* --- CONTENIDO --- */
+        .tab-content { display: none; height: calc(100vh - 180px); overflow-y: auto; padding: 20px; }
+        .tab-content.active { display: block; }
+        .container { max-width: 1800px; margin: 0 auto; }
+
+        /* --- CARDS & HEADERS --- */
+        .tech-card {
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--border-color);
+        }
+
+        .card-head {
+            background: var(--purple-glow);
+            padding: 10px 20px;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: var(--shadow-glow);
+        }
+        .card-title { 
+            color: white; font-weight: 700; font-size: 18px; letter-spacing: 1px; text-transform: uppercase; 
+            display: flex; align-items: center; gap: 10px;
+        }
+        
+        /* TABLAS */
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th { background: #f8fafc; color: #475569; font-weight: 700; padding: 10px; border-bottom: 2px solid #e2e8f0; position: sticky; top: 0; z-index: 20; }
+        td { padding: 8px; border-bottom: 1px solid #f1f5f9; text-align: center; color: #334155; font-weight: 600; }
+        
+        td.left { text-align: left; background: white; position: sticky; left: 0; border-right: 1px solid #e2e8f0; z-index: 10; font-weight: 700; }
+        th.left { text-align: left; background: #f8fafc; position: sticky; left: 0; z-index: 30; border-right: 1px solid #e2e8f0; }
+        tr:hover td { background: #f1f5f9; }
+
+        /* SEMÁFOROS */
+        .tag { padding: 2px 8px; font-size: 12px; font-weight: 700; border-radius: 4px; }
+        .tag-red { color: #dc2626; background: #fee2e2; }
+        .tag-green { color: #16a34a; background: #dcfce7; }
+        .tag-yellow { color: #ca8a04; background: #fef9c3; }
+
+        /* GRIDS */
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        .grid-rank { display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 20px; margin-bottom: 20px; }
+        
+        /* SCROLLBAR */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
+
+        input[type="file"] { display: none; }
+        #adminPanel { display: none; }
+        #emptyState { text-align:center; padding: 50px; font-size: 20px; color: #94a3b8; display:none; }
+        
+        /* ESTILOS TABLA DIARIA */
+        .daily-money { color: var(--col-money); font-weight: 800; font-size: 15px; }
+        .daily-pdp { color: var(--col-pdp); font-weight: 700; }
+    </style>
+</head>
+<body>
+
+    <div id="dataLoader" style="position:fixed; top:0; left:0; width:100%; height:100%; background:white; z-index:9000; display:none; justify-content:center; align-items:center; flex-direction:column;">
+        <i class="fa-solid fa-spinner fa-spin" style="font-size:50px; color:#7c3aed; margin-bottom:15px;"></i>
+        <h3 style="font-family:'Rajdhani'; letter-spacing:2px; color:#1e1b4b;" id="loaderMsg">CARGANDO SISTEMA...</h3>
+    </div>
+
+    <div id="loginScreen">
+        <div class="login-panel">
+            <h1 style="font-family:'Rajdhani'; color:#1e1b4b; margin:0 0 5px 0;">GEINCOS</h1>
+            <p style="color:#7c3aed; font-weight:700; margin:0 0 30px 0; letter-spacing:2px;">CONTROL TOWER V56</p>
+            <input type="text" id="userInput" class="login-input" placeholder="ID USUARIO">
+            <input type="password" id="passInput" class="login-input" placeholder="CLAVE ACCESO">
+            <button class="login-btn" onclick="attemptLogin()">INGRESAR</button>
+            <div id="loginError" style="color:#dc2626; margin-top:15px; display:none; font-weight:700;">ACCESO DENEGADO</div>
+        </div>
+    </div>
+
+    <div id="app" style="display:none;">
+        
+        <div class="header">
+            <div class="logo-text">CONTROL <span>TOWER</span></div>
+            <div class="top-controls">
+                <div id="adminPanel" class="control-pod">
+                    <span style="color:#64748b;">CARGA:</span>
+                    <input type="date" id="uploadDate">
+                    <label class="upload-btn"><i class="fa-solid fa-cloud-arrow-up"></i> <input type="file" id="fileInput" accept=".xlsx, .csv"></label>
+                </div>
+                <div class="control-pod"><i class="fa-solid fa-user-circle" style="color:#7c3aed; font-size:18px;"></i> <span id="displayUser">USER</span></div>
+                <i class="fa-solid fa-power-off" onclick="logout()" style="color:#dc2626; cursor:pointer; font-size:18px;" title="Salir"></i>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('tabOperativo')">VISIÓN OPERATIVA</button>
+            <button class="tab-btn" onclick="switchTab('tabEstrategico')">ESTRATEGIA</button>
+            <button class="tab-btn" onclick="switchTab('tabDaily')">SEGUIMIENTO DIARIO</button>
+        </div>
+
+        <div class="filter-section">
+            <div class="control-pod" style="background:#f8fafc; border:1px solid #e2e8f0;">
+                <span style="color:#64748b;"><i class="fa-regular fa-calendar"></i> VER FECHA:</span>
+                <input type="date" id="viewDate" onchange="handleDateChange()">
+            </div>
+            
+            <select id="selLider" class="hud-select" onchange="filterSupervisors()"><option value="ALL">TODOS LÍDERES</option></select>
+            
+            <select id="selSup" class="hud-select" onchange="filterCarteras()"><option value="ALL">TODOS SUPERVISORES</option></select>
+            
+            <select id="selCart" class="hud-select" onchange="applyFilters()"><option value="ALL">TODAS CARTERAS</option></select>
+            
+            <button onclick="resetFilters()" style="background:white; border:1px solid #7c3aed; color:#7c3aed; font-weight:700; padding:6px 15px; border-radius:4px; cursor:pointer; margin-left:auto;">RESET</button>
+        </div>
+
+        <div id="emptyState">NO HAY DATOS EN ESTA FECHA</div>
+
+        <div class="tab-content active" id="tabOperativo">
+            <div class="container" id="contentOperativo">
+                <div class="tech-card" style="height:auto;">
+                    <div class="card-head"><div class="card-title"><i class="fa-solid fa-chart-pie"></i> RESUMEN POR LÍDER CORE</div></div>
+                    <div style="overflow:auto;"><table id="liderTable"><thead><tr><th class="left">LÍDER</th><th>CARTERAS</th><th>HC</th><th>RIESGO</th><th>META (>85%)</th><th>META TOTAL</th><th>REAL TOTAL</th><th>% EFF</th></tr></thead><tbody></tbody></table></div>
+                </div>
+                <div class="tech-card" style="height:auto;">
+                    <div class="card-head"><div class="card-title"><i class="fa-solid fa-list-check"></i> MATRIZ DETALLADA POR SUPERVISOR</div></div>
+                    <div style="overflow:auto; max-height:400px;">
+                        <table id="mainTable"><thead><tr><th class="left">SUPERVISOR</th><th>LÍDER</th><th>CARTERA</th><th>HC</th><th style="color:#dc2626">0-15%</th><th style="color:#d97706">30-50%</th><th>70-100%</th><th style="color:#16a34a">>120%</th><th>META</th><th>REAL</th><th>% EFF</th></tr></thead><tbody></tbody></table>
+                    </div>
+                </div>
+                <div class="grid-rank">
+                    <div class="tech-card">
+                        <div class="card-head"><div class="card-title">🌎 TOP GLOBAL</div></div>
+                        <div style="overflow:auto; max-height:350px"><table id="globalTable"><thead><tr><th class="left">ASESOR</th><th>PDP</th><th>META</th><th>REAL</th><th>%</th></tr></thead><tbody></tbody></table></div>
+                    </div>
+                    <div class="tech-card">
+                        <div class="card-head"><div class="card-title">👶 SEMILLERO (<= 3 M)</div><span id="newTotalBadge" class="tag" style="background:white; color:#7c3aed;">S/ 0</span></div>
+                        <div style="display:flex; justify-content:space-between; padding:10px 20px; background:#f8fafc; font-weight:700; border-bottom:1px solid #e2e8f0; font-size:12px;"><span>TICKET: <b id="newTicket">0</b></span><span>VS GLOBAL: <b id="newVsGlobal">0%</b></span><span>EFECTIVIDAD: <b id="newEff">0%</b></span></div>
+                        <div style="overflow:auto; max-height:300px"><table id="newTable"><thead><tr><th class="left">ASESOR</th><th>MESES</th><th>PDP</th><th>META</th><th>REAL</th><th>%</th></tr></thead><tbody></tbody></table></div>
+                    </div>
+                    <div class="tech-card">
+                        <div class="card-head"><div class="card-title">🔴 SANTANDER</div></div>
+                        <div style="overflow:auto; max-height:350px"><table id="santanderTable"><thead><tr><th class="left">ASESOR</th><th>PDP</th><th>META</th><th>REAL</th><th>%</th></tr></thead><tbody></tbody></table></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tabEstrategico">
+            <div class="container">
+                <div style="margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
+                    <h2 style="margin:0; font-family:'Rajdhani'; color:#1e1b4b; text-transform:uppercase; letter-spacing:1px; font-weight:800;">Top 3 Carteras Críticas</h2>
+                    <div style="background:white; padding:8px 15px; border:1px solid #e2e8f0; font-weight:700; border-radius:4px;">META CURVA: <b id="curveTarget" style="color:#d97706">0%</b></div>
+                </div>
+                <div class="grid-3" id="riskPortfoliosContainer"></div>
+                <h2 style="margin:40px 0 20px 0; font-family:'Rajdhani'; color:#7c3aed; text-transform:uppercase; letter-spacing:1px; font-weight:800;">Detalle de Nómina (360°)</h2>
+                <div style="display:flex; flex-direction:column; gap:20px;">
+                    <div class="tech-card">
+                        <div class="card-head" style="background:#10b981; box-shadow:0 4px 15px rgba(16, 185, 129, 0.4);"><div class="card-title">⭐ ELITE (>80%)</div><small id="eliteCount" style="font-weight:700; color:white;">0</small></div>
+                        <div style="overflow:auto;"><table id="tableElite"><thead><tr><th class="left">ASESOR</th><th>CARTERA</th><th># PDP</th><th>TKT</th><th>CIERRE</th><th>CALIDAD</th><th>AVANCE</th></tr></thead><tbody></tbody></table></div>
+                    </div>
+                    <div class="tech-card">
+                        <div class="card-head" style="background:#f59e0b; box-shadow:0 4px 15px rgba(245, 158, 11, 0.4);"><div class="card-title">⚡ CORE (40-80%)</div><small id="coreCount" style="font-weight:700; color:white;">0</small></div>
+                        <div style="overflow:auto;"><table id="tableCore"><thead><tr><th class="left">ASESOR</th><th>CARTERA</th><th># PDP</th><th>TKT</th><th>CIERRE</th><th>CALIDAD</th><th>AVANCE</th></tr></thead><tbody></tbody></table></div>
+                    </div>
+                    <div class="tech-card">
+                        <div class="card-head" style="background:#ef4444; box-shadow:0 4px 15px rgba(239, 68, 68, 0.4);"><div class="card-title">🚨 CRÍTICOS (<40%)</div><small id="critCount" style="font-weight:700; color:white;">0</small></div>
+                        <div style="overflow:auto;"><table id="tableCrit"><thead><tr><th class="left">ASESOR</th><th>CARTERA</th><th># PDP</th><th>TKT</th><th>CIERRE</th><th>CALIDAD</th><th>AVANCE</th></tr></thead><tbody></tbody></table></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-content" id="tabDaily">
+            <div class="container">
+                <div class="tech-card">
+                    <div class="card-head" style="background:var(--blue-glow);">
+                        <div class="card-title"><i class="fa-solid fa-list-check"></i> OPERACIÓN DEL DÍA SELECCIONADO</div>
+                        <span class="tag" style="background:white; color:#3b82f6;">DATA DIARIA EXACTA</span>
+                    </div>
+                    <div style="overflow:auto; max-height: 600px;">
+                        <table id="dailyTable">
+                            <thead>
+                                <tr>
+                                    <th class="left" style="min-width:200px;">ASESOR</th>
+                                    <th>GESTIONES</th>
+                                    <th>EFECTIVAS</th>
+                                    <th>PDP (CANT)</th>
+                                    <th>MONTO PDP</th>
+                                    <th>PAGOS HOY</th>
+                                    <th>TASA CIERRE</th>
+                                    <th>CALIDAD</th>
+                                    <th>PROYECTADO</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const URL_PROYECTO = 'https://kvdjqvvlargiqlgyxxnw.supabase.co';
+        const CLAVE_PUBLICA = 'sb_publishable_y6LtwgjU7yIy3iLkAl3-gQ_goExgG67';
+        const cliente = supabase.createClient(URL_PROYECTO, CLAVE_PUBLICA);
+
+        let fullData=[], filteredData=[];
+
+        window.onload = function() {
+            document.getElementById('uploadDate').value = new Date().toISOString().split('T')[0];
+        };
+
+        function attemptLogin() {
+            const u = document.getElementById('userInput').value, p = document.getElementById('passInput').value;
+            if((u==='admin' && p==='admin123') || (u==='Geincos' && p==='Geincos25*')) loginSuccess(u==='admin'?'admin':'visor');
+            else document.getElementById('loginError').style.display='block';
+        }
+
+        async function loginSuccess(role) {
+            document.getElementById('loginScreen').style.display='none';
+            document.getElementById('app').style.display='block';
+            document.getElementById('displayUser').innerText = role==='admin'?'ADMIN':'VISOR';
+            if(role==='admin') document.getElementById('adminPanel').style.display='flex';
+            
+            const { data } = await cliente.from('reporte').select('fecha_reporte').order('fecha_reporte', {ascending: false}).limit(1);
+            document.getElementById('viewDate').value = (data && data.length > 0) ? data[0].fecha_reporte : new Date().toISOString().split('T')[0];
+            handleDateChange();
+        }
+
+        function logout() { location.reload(); }
+        function switchTab(id) { 
+            document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            event.currentTarget.classList.add('active');
+        }
+
+        function handleDateChange() { fetchDataFromCloud(); }
+
+        async function fetchDataFromCloud() {
+            const l = document.getElementById('dataLoader'); l.style.display='flex';
+            document.getElementById('loaderMsg').innerText = "CARGANDO DATOS...";
+            const fechaVer = document.getElementById('viewDate').value;
+            
+            const { data, error } = await cliente.from('reporte').select('*').eq('fecha_reporte', fechaVer);
+            l.style.display='none';
+            if(error) { alert("Error Conexión: " + error.message); return; }
+            
+            fullData = data || [];
+            if(fullData.length === 0) {
+                document.getElementById('emptyState').style.display = 'block';
+                document.getElementById('contentOperativo').style.display = 'none';
+                renderDailyTable([]);
+            } else {
+                document.getElementById('emptyState').style.display = 'none';
+                document.getElementById('contentOperativo').style.display = 'block';
+                initFilters(); applyFilters();
+            }
+        }
+
+        async function uploadDataToCloud(newData) {
+            const l = document.getElementById('dataLoader'); l.style.display='flex';
+            document.getElementById('loaderMsg').innerText = "SUBIENDO A NUBE...";
+            const fechaCarga = document.getElementById('uploadDate').value;
+            
+            if(!fechaCarga) { alert("Selecciona fecha"); l.style.display='none'; return; }
+
+            try {
+                const datosConFecha = newData.map(item => ({ ...item, fecha_reporte: fechaCarga }));
+                const { error: delErr } = await cliente.from('reporte').delete().eq('fecha_reporte', fechaCarga);
+                if(delErr) throw delErr;
+                const { error: insErr } = await cliente.from('reporte').insert(datosConFecha);
+                if(insErr) throw insErr;
+
+                l.style.display='none';
+                alert("✅ ÉXITO: Datos guardados correctamente.");
+                if(document.getElementById('viewDate').value === fechaCarga) handleDateChange();
+
+            } catch (err) {
+                l.style.display='none';
+                alert("❌ ERROR AL GUARDAR:\n" + (err.message || JSON.stringify(err)));
+            }
+        }
+
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            const r = new FileReader();
+            r.onload = (evt) => {
+                const w = XLSX.read(evt.target.result, {type:'array'});
+                const s = w.Sheets[w.SheetNames[0]];
+                const raw = XLSX.utils.sheet_to_json(s, {header:1});
+                let hRow = 0;
+                for(let i=0; i<Math.min(30, raw.length); i++) { 
+                    const rowStr = JSON.stringify(raw[i]).toLowerCase(); 
+                    if(rowStr.includes('nombre_asesor') || rowStr.includes('gestiones')) hRow=i; 
+                }
+                const json = XLSX.utils.sheet_to_json(s, {range:hRow});
+                const clean = cleanData(json, Object.keys(json[0]||{}));
+                if(clean.length>0) uploadDataToCloud(clean);
+                else alert("Excel vacío o formato incorrecto");
+            };
+            r.readAsArrayBuffer(e.target.files[0]);
+        });
+
+        function cleanData(data, keys) {
+            const findCol = (list) => { for(const t of list) { const norm = t.toLowerCase().replace(/_/g,'').replace(/\s/g,''); const f = keys.find(k=>k.toLowerCase().replace(/_/g,'').replace(/\s/g,'')===norm); if(f) return f; } return null; };
+            
+            const kLider = findCol(['lider_core', 'lider']); 
+            const kSup = findCol(['supervisor']); 
+            const kCart = findCol(['cartera']); 
+            const kAsesor = findCol(['nombre_asesor', 'nombre']); 
+            const kReal = findCol(['pagos_mes', 'pagos', 'recaudo']); 
+            const kMeta = findCol(['objetivo', 'meta']); 
+            const kMeses = findCol(['meses_empresa', 'meses', 'antiguedad']); 
+            const kPDP = findCol(['monto_pdp_mes', 'monto_pdp']); 
+            const kCal = findCol(['calidad_pdp_mes', 'calidad']); 
+            const kTkt = findCol(['ticket_pdp_mes', 'ticket']); 
+            const kCnt = findCol(['total_pdps_mes', 'total_pdps']); 
+            const kTasa = findCol(['tasa_cierre_mes', 'tasa_cierre']);
+            
+            const kGestHoy = findCol(['gestiones_hoy', 'gestiones']);
+            const kEfecHoy = findCol(['efectivas_hoy', 'efectivas']);
+            const kMontoPdpHoy = findCol(['monto_pdp_hoy']);
+            const kTotalPdpHoy = findCol(['total_pdps_hoy']);
+            const kTasaCierreHoy = findCol(['tasa_cierre_hoy']);
+            const kProyHoy = findCol(['proyectado_hoy', 'proyeccion_hoy']);
+            const kCalPdpHoy = findCol(['calidad_pdp_hoy']);
+            const kPagosHoy = findCol(['pagos_hoy']);
+
+            const val = (v) => { if(!v)return 0; let s=String(v).replace(',','.'); return parseFloat(s.replace(/[^0-9.-]/g,''))||0; };
+
+            return data.map(r => ({
+                lider: r[kLider]||'Sin Líder', sup: r[kSup]||'Sin Sup', cart: r[kCart]||'Gen', asesor: r[kAsesor]||'X',
+                real: val(r[kReal]), meta: val(r[kMeta]), meses: val(r[kMeses]), 
+                pdp: val(r[kPDP]), calidad: val(r[kCal]), ticket: val(r[kTkt]), pdp_cnt: val(r[kCnt]), tasa: val(r[kTasa]),
+                gestiones_hoy: val(r[kGestHoy]), efectivas_hoy: val(r[kEfecHoy]), monto_pdp_hoy: val(r[kMontoPdpHoy]),
+                total_pdps_hoy: val(r[kTotalPdpHoy]), tasa_cierre_hoy: val(r[kTasaCierreHoy]), proyectado_hoy: val(r[kProyHoy]),
+                calidad_pdp_hoy: val(r[kCalPdpHoy]), pagos_hoy: val(r[kPagosHoy])
+            }));
+        }
+
+        // --- GESTIÓN DE FILTROS EN CASCADA ---
+        
+        function populateSelect(id, options) {
+            const s = document.getElementById(id);
+            s.innerHTML = '<option value="ALL">TODOS</option>';
+            options.sort().forEach(x => s.innerHTML += `<option value="${x}">${x}</option>`);
+        }
+
+        function initFilters() {
+            const lideres = [...new Set(fullData.map(d => d.lider))];
+            populateSelect('selLider', lideres);
+            
+            const sups = [...new Set(fullData.map(d => d.sup))];
+            populateSelect('selSup', sups);
+
+            const carts = [...new Set(fullData.map(d => d.cart))];
+            populateSelect('selCart', carts);
+        }
+
+        // 1. CAMBIO EN LÍDER
+        function filterSupervisors() {
+            const liderSel = document.getElementById('selLider').value;
+            const dataLider = liderSel === 'ALL' ? fullData : fullData.filter(d => d.lider === liderSel);
+            
+            const sups = [...new Set(dataLider.map(d => d.sup))];
+            populateSelect('selSup', sups);
+            
+            const carts = [...new Set(dataLider.map(d => d.cart))];
+            populateSelect('selCart', carts);
+
+            applyFilters();
+        }
+
+        // 2. CAMBIO EN SUPERVISOR (FILTRA CARTERAS)
+        function filterCarteras() {
+            const liderSel = document.getElementById('selLider').value;
+            const supSel = document.getElementById('selSup').value;
+            
+            let dataFiltrada = fullData;
+            if (liderSel !== 'ALL') dataFiltrada = dataFiltrada.filter(d => d.lider === liderSel);
+            if (supSel !== 'ALL') dataFiltrada = dataFiltrada.filter(d => d.sup === supSel);
+            
+            const carts = [...new Set(dataFiltrada.map(d => d.cart))];
+            populateSelect('selCart', carts);
+            
+            applyFilters();
+        }
+
+        // 3. APLICAR FILTROS
+        function applyFilters() {
+            const l = document.getElementById('selLider').value;
+            const s = document.getElementById('selSup').value;
+            const c = document.getElementById('selCart').value;
+            
+            filteredData = fullData.filter(r => (l==='ALL'||r.lider===l) && (s==='ALL'||r.sup===s) && (c==='ALL'||r.cart===c));
+            render(filteredData);
+            renderDailyTable(filteredData); 
+        }
+        
+        function resetFilters() { 
+            document.getElementById('selLider').value='ALL'; 
+            filterSupervisors(); // Esto resetea los hijos
+        }
+
+        function renderDailyTable(data) {
+            const tbody = document.querySelector('#dailyTable tbody');
+            tbody.innerHTML = '';
+            
+            if(data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9">NO HAY REGISTROS DEL DÍA</td></tr>';
+                return;
+            }
+
+            const fmtMoney = new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN', maximumFractionDigits: 0 });
+            const pct = (v) => v===0 ? '0%' : (v*100).toFixed(2) + '%'; 
+
+            data.sort((a,b) => b.pagos_hoy - a.pagos_hoy).forEach(r => {
+                const stylePago = r.pagos_hoy > 0 ? 'color:var(--col-money); font-weight:800;' : 'color:#cbd5e1;';
+                const stylePdp = r.total_pdps_hoy > 0 ? 'color:var(--col-pdp); font-weight:700;' : 'color:#cbd5e1;';
+
+                const row = `<tr><td class="left">${r.asesor.substring(0,25)}</td><td>${r.gestiones_hoy}</td><td>${r.efectivas_hoy}</td><td style="${stylePdp}">${r.total_pdps_hoy}</td><td style="${stylePdp}">${fmtMoney.format(r.monto_pdp_hoy)}</td><td style="${stylePago}">${fmtMoney.format(r.pagos_hoy)}</td><td>${pct(r.tasa_cierre_hoy)}</td><td>${pct(r.calidad_pdp_hoy)}</td><td style="color:#64748b;">${fmtMoney.format(r.proyectado_hoy)}</td></tr>`;
+                tbody.innerHTML += row;
+            });
+        }
+
+        function render(data) {
+            const fmt = new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN', maximumFractionDigits: 0 });
+            const pct = (v) => (v * 100).toFixed(0) + '%';
+            
+            const lideres={}, sups={};
+            data.forEach(r => {
+                if(!lideres[r.lider]) lideres[r.lider]={name:r.lider, hc:0, meta:0, real:0, risk:0, metaOk:0, carts:new Set()};
+                lideres[r.lider].hc++; lideres[r.lider].meta+=r.meta; lideres[r.lider].real+=r.real; lideres[r.lider].carts.add(r.cart);
+                if(r.meta>0 && (r.real/r.meta)<0.3) lideres[r.lider].risk++;
+                if(r.meta>0 && (r.real/r.meta)>0.85) lideres[r.lider].metaOk++;
+
+                if(!sups[r.sup]) sups[r.sup]={name:r.sup, lid:r.lider, cart:r.cart, hc:0, meta:0, real:0, t1:0, t3:0, t5:0, t7:0};
+                sups[r.sup].hc++; sups[r.sup].meta+=r.meta; sups[r.sup].real+=r.real;
+                const av=r.meta>0?r.real/r.meta:0;
+                if(av<0.15) sups[r.sup].t1++; else if(av<0.5) sups[r.sup].t3++; else if(av<1.0) sups[r.sup].t5++; else sups[r.sup].t7++;
+            });
+
+            const tL = document.querySelector('#liderTable tbody'); tL.innerHTML='';
+            Object.values(lideres).sort((a,b)=>b.real-a.real).forEach(l=>{ tL.innerHTML+=`<tr><td class="left">${l.name}</td><td>${[...l.carts].slice(0,2)}</td><td>${l.hc}</td><td class="tag tag-red">${l.risk}</td><td class="tag tag-green">${l.metaOk}</td><td>${fmt.format(l.meta)}</td><td>${fmt.format(l.real)}</td><td>${pct(l.meta>0?l.real/l.meta:0)}</td></tr>`;});
+
+            const tS = document.querySelector('#mainTable tbody'); tS.innerHTML='';
+            Object.values(sups).sort((a,b)=>(b.meta>0?b.real/b.meta:0)-(a.meta>0?a.real/a.meta:0)).forEach(s=>{ tS.innerHTML+=`<tr><td class="left">${s.name}</td><td>${s.lid.substr(0,8)}</td><td>${s.cart.substr(0,8)}</td><td>${s.hc}</td><td style="color:#dc2626">${s.t1}</td><td style="color:#d97706">${s.t3}</td><td style="color:#475569">${s.t5}</td><td style="color:#16a34a; font-weight:bold">${s.t7}</td><td>${fmt.format(s.meta)}</td><td style="color:#4f46e5;font-weight:bold">${fmt.format(s.real)}</td><td>${pct(s.meta>0?s.real/s.meta:0)}</td></tr>`;});
+
+            const fill = (id, d, isNew) => {
+                const t=document.querySelector('#'+id+' tbody'); t.innerHTML='';
+                d.sort((a,b)=>(b.meta>0?b.real/b.meta:0)-(a.meta>0?a.real/a.meta:0)).slice(0,50).forEach(r=>{
+                    const av=r.meta>0?r.real/r.meta:0;
+                    t.innerHTML+=`<tr><td class="left">${r.asesor.substr(0,18)}</td>${isNew?`<td style="color:#7c3aed; font-weight:bold;">${r.meses}m</td>`:''}<td style="color:#94a3b8">${fmt.format(r.pdp)}</td><td style="color:#64748b">${fmt.format(r.meta)}</td><td style="color:#4f46e5; font-weight:700;">${fmt.format(r.real)}</td><td style="font-weight:bold;color:${av>=1?'#16a34a':'#475569'}">${pct(av)}</td></tr>`;
+                });
+            };
+            const nuevos=data.filter(r=>r.meses<=3);
+            fill('globalTable',data); fill('newTable',nuevos,true); fill('santanderTable',data.filter(r=>r.cart.toUpperCase().includes('SANTANDER')));
+
+            const CURVE=getExpectedCurve(); document.getElementById('curveTarget').innerText=CURVE.toFixed(1)+'%';
+            const riskC=document.getElementById('riskPortfoliosContainer'); riskC.innerHTML='';
+            const cObj={}; data.forEach(r=>{if(!cObj[r.cart])cObj[r.cart]={name:r.cart,meta:0,real:0,bad:[]}; cObj[r.cart].meta+=r.meta;cObj[r.cart].real+=r.real; if((r.meta>0?r.real/r.meta:0)*100<CURVE) cObj[r.cart].bad.push(r); });
+            Object.values(cObj).sort((a,b)=>(a.meta>0?a.real/a.meta:0)-(b.meta>0?b.real/b.meta:0)).slice(0,3).forEach((c,i)=>{
+                let lst=''; c.bad.sort((a,b)=>(a.meta>0?a.real/a.meta:0)-(b.meta>0?b.real/b.meta:0)).slice(0,10).forEach(x=>lst+=`<tr><td>${x.asesor.substr(0,15)}</td><td>${fmt.format(x.real)}</td><td><span class="tag tag-red">-${(CURVE-((x.meta>0?x.real/x.meta:0)*100)).toFixed(0)}%</span></td></tr>`);
+                riskC.innerHTML+=`<div class="tech-card" style="margin:0;"><div class="card-head" style="background:#fff; border-bottom:1px solid #fee2e2;"><div class="card-title" style="color:#1e1b4b; font-size:14px;">${c.name}</div><div style="font-size:18px; font-weight:800; color:#dc2626;">${pct(c.meta>0?c.real/c.meta:0)}</div></div><details style="padding:10px;"><summary style="cursor:pointer; font-weight:700; color:#64748b;">VER INCUMPLIMIENTO (${c.bad.length})</summary><table style="margin-top:10px;"><tbody>${lst}</tbody></table></details></div>`;
+            });
+
+            const fSeg = (id, d, cid) => {
+                document.getElementById(cid).innerText=d.length+" Asesores";
+                const t=document.querySelector('#'+id+' tbody'); t.innerHTML='';
+                d.sort((a,b)=>(b.meta>0?b.real/b.meta:0)-(a.meta>0?a.real/a.meta:0)).forEach(r=>{
+                     t.innerHTML+=`<tr><td class="left">${r.asesor.substr(0,18)}</td><td>${r.cart.substr(0,8)}</td><td>${r.pdp_cnt}</td><td>${fmt.format(r.ticket)}</td><td style="color:${r.tasa>=0.1?'#16a34a':'#94a3b8'}">${pct(r.tasa)}</td><td style="color:${r.calidad>=80?'#16a34a':'#94a3b8'}">${pct(r.calidad)}</td><td style="font-weight:bold">${pct(r.meta>0?r.real/r.meta:0)}</td></tr>`;
+                });
+            }
+            fSeg('tableElite', data.filter(r=>(r.meta>0?r.real/r.meta:0)>0.8), 'eliteCount');
+            fSeg('tableCore', data.filter(r=>{const a=(r.meta>0?r.real/r.meta:0);return a>=0.4&&a<=0.8}), 'coreCount');
+            fSeg('tableCrit', data.filter(r=>(r.meta>0?r.real/r.meta:0)<0.4), 'critCount');
+        }
+
+        function getExpectedCurve() {
+            const arr=[0,4,4,4,4.5,4.5,3.5,0,0,0,5,5,5,3.5,0,6,5,5,5,5,3.5,0,4,4,4,0,3,3.5,0,3,3,3.5];
+            let acc=0; for(let i=1;i<=new Date().getDate();i++) if(arr[i])acc+=arr[i]; return acc;
+        }
+    </script>
+</body>
+</html>
